@@ -1,25 +1,22 @@
-﻿// 小学生测验.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
-//
-
-#include<iostream>
-#include <cstdlib>
-#include <list>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <algorithm>
-#include <random>
-#include <thread>
-#include <chrono>
+﻿#include<iostream>
+#include <cstdlib>  //辅助时间记录(time)及程序退出(exit)
+#include <list>     //列表用于存储问题
+#include <fstream>  //文件读写 ifstream读,ofstream写
+#include <sstream>  //字符串流操作 stringstream 解析字符串
+#include <vector>   //动态数组用于存储排行榜信息
+#include <algorithm>//排行榜排序比较
+#include <random>   //生成随机数
+#include <thread>   
+#include <chrono>   //程序暂停,显示一些提示信息
 
 using namespace std;
 
-int Number;
+int Number; //当前正在操作的是哪套试卷?
 
-void Update_Number() {
-    ifstream config("config");
+void Update_Number() {     //从配置文件中尝试读取历史记录,若无则默认为1
+    ifstream config("config"); 
     config >> Number;
-    if (config.fail()) {
+    if (config.fail()) {   //读取失败,那新建一个文件并写入
         ofstream config("config");
         Number = 1;
         config << Number;
@@ -28,21 +25,21 @@ void Update_Number() {
     
 }
 
-class Question {
+class Question {  //问题 类
 public:
     int num1;
     int num2;
-    char operatorSymbol;
-    int correctAnswer;
-    int userAnswer;
-    bool isAnswered;
+    char operatorSymbol;   //加减
+    int correctAnswer;     //正确答案
+    int userAnswer;        //用户答案
+    bool isAnswered;       //用户答了吗?
 
     // 构造函数
     Question() : num1(0), num2(0), operatorSymbol('+'), correctAnswer(0), userAnswer(0), isAnswered(false) {}
 
     // 从文件读取试题到试题列表的函数
     bool readQuestionsFromFile(const string& filename, list<Question>& testQuestions) {
-        testQuestions.clear();
+        testQuestions.clear();   //先清空当前所有问题,防止被覆盖
         ifstream inFile(filename);
         if (inFile.is_open()) {
             string line;
@@ -50,16 +47,16 @@ public:
                 Question question;
                 // 创建字符串流用于解析每行数据
                 stringstream ss(line);
-                string questionNumberStr;
-                char dot;
+                string questionNumberStr;//用于存储问题序号,如"1."
+                char dot;//用于存储串流文本中的"="
                 ss >> questionNumberStr >> question.num1 >> question.operatorSymbol >> question.num2 >> dot >> question.correctAnswer;
                 // 将解析出的数据存入Question结构体实例
-                question.isAnswered = false;
-                question.userAnswer = 0;
+                question.isAnswered = false; //默认未回答
+                question.userAnswer = 0;     
                 testQuestions.push_back(question);
             }
             inFile.close();
-            return true;
+            return true;//读取成功就返回1
         }
         else {
             cerr << "无法打开文件读取试题，请检查文件名及文件权限等问题。" << endl;
@@ -69,7 +66,7 @@ public:
 
 };
 
-class UserNode {
+class UserNode {  //读取文件中存储的用户名和密码,并存储到链表
 private:
     std::string username;
     std::string password;
@@ -108,7 +105,7 @@ public:
     }
 };
 
-class Student{
+class Student{  //学生类 用于存储用户输入的用户名和密码并与链表中进行比对,问题列表也存储在学生类中,每次答题的开始时间和结束时间以及得分
 public:
     string Username{};
     string Password{};
@@ -124,7 +121,7 @@ public:
         endTime=0;
     }
 
-    // 重置学生信息
+    // 重置学生信息,切换账号时调用,清空得分,账号密码和开始结束时间,不清空得分会导致多次答题得分累积
     void reset() {
         Username.clear();
         Password.clear();
@@ -133,7 +130,7 @@ public:
         endTime = 0;
     }
 
-    // 重置试题信息
+    // 重置试题信息(其实是删除)
     void reset_Q() {
         score = 0;
         testQuestions.clear();
@@ -158,8 +155,8 @@ public:
 
     // 保存测试记录
     void saveTestRecord() {
-        ofstream outFile(Username + ".txt", ios_base::app);
-        if (outFile.is_open()) {
+        ofstream outFile(Username + ".txt", ios_base::app); //以"用户名+txt"的命名方式保存
+        if (outFile.is_open()) { //能打开就写入
             outFile << "用户名: " << Username << endl;
             outFile << "得分: " << score << endl;
             char startTimeStr[26];
@@ -171,7 +168,7 @@ public:
 
             outFile << "试题信息:" << endl;
             int questionNumber = 1;
-            for (const auto& question : testQuestions) {
+            for (const auto& question : testQuestions) { //循环写入每个试题
                 outFile << questionNumber << ". " << question.num1 << " " << question.operatorSymbol << " "
                     << question.num2 << " = ";
                 if (question.isAnswered) {
@@ -192,19 +189,21 @@ public:
     }
 };
 
-// 从文件中读取用户名和密码到链表，参数改为类类型的指针引用
+// 从文件中读取用户名和密码到链表，参数为类类型的指针引用
 void readFromFile(const string& filename, UserNode*& head) {
-    head = nullptr;
-    UserNode* tail = nullptr;
+    head = nullptr;     //初始化头指针
+    UserNode* tail = nullptr;  //初始化尾指针
     ifstream file(filename);
     if (file.is_open()) {
         string line;
-        while (getline(file, line)) {
+        while (getline(file, line)) {  //循环解析文件中的每个用户名和密码
             stringstream ss(line);
             string username, password;
             if (ss >> username >> password) {
-                auto* newNode = new UserNode(username, password);
-                if (head == nullptr) {
+                auto* newNode = new UserNode(username, password); //传给构造函数完成新节点的构造
+                if (head == nullptr) {//判断链表是否为空,如果为空，说明这是添加的第一个节点，
+                    //那么将新创建的节点newNode赋值给头指针head，同时也赋值给尾指针tail，
+                    //因为此时链表只有这一个节点，它既是头节点也是尾节点。
                     head = newNode;
                     tail = newNode;
                 }
@@ -222,19 +221,19 @@ void readFromFile(const string& filename, UserNode*& head) {
 int compareUser(const UserNode* head, const string& inputUsername, const string& inputPassword) {
     const UserNode* current = head;
     while (current != nullptr) {
-        if (current->getUsername() == inputUsername) {
+        if (current->getUsername() == inputUsername) { //首先匹配用户名
             // 直接获取链表节点中存储的密码
             string storedPassword = current->getPassword();
             if (inputPassword == storedPassword) {
-                return 1;
+                return 1;  //用户已注册且密码正确,可以登录
             }
             else {
-                return 2;  // 用户已注册但是密码错误
+                return 2;  // 用户已注册但是密码错误,不可以登录
             }
         }
         current = current->getNext();
     }
-    return 0;
+    return 0;//未匹配到用户名,则说明用户未注册,直接为其注册
 }
 
 // 将新的用户名和密码写入文件
@@ -269,29 +268,29 @@ int login(Student& student) {
     cout << "请输入您的密码:";
     cin >> student.Password;
     // 比较用户输入和链表中的数据
-    if (compareUser(userList, student.Username, student.Password) == 1) {
+    if (compareUser(userList, student.Username, student.Password) == 1) {//用户已注册且密码匹配成功
         cout << "登录成功！" << endl;
-        freeList(userList);
+        freeList(userList);//完成登录操作后就释放链表
         cout << "正在进入小学生测试" << endl;
         this_thread::sleep_for(std::chrono::milliseconds(500));
         return 1;
     }
-    else if (compareUser(userList, student.Username, student.Password) == 0) {
+    else if (compareUser(userList, student.Username, student.Password) == 0) { //用户未注册,将输入的账号和密码写入user文件
         writeToFile("user", student.Username, student.Password);
         freeList(userList);
         cout << "正在进入小学生测试" << endl;
-        this_thread::sleep_for(std::chrono::milliseconds(500));
+        this_thread::sleep_for(std::chrono::milliseconds(500));//暂停0.5s方便用户看到提示语
         return 1;
     }
     else {
-        cout << "密码错误" << endl;
+        cout << "密码错误" << endl; 
         freeList(userList);
         return 0;
     }
 
 }
 
-void GUI_main(Student& student) {
+void GUI_main(Student& student) {  //程序主页面
     cout << "*************************" << endl;
     cout << "欢迎" << student.Username << "来到一二年级小学生测验!!!" << endl;
     cout << "1.开始答题" << endl;
@@ -308,16 +307,16 @@ void GUI_main(Student& student) {
 
 // 生成随机试题函数
 void generateQuestions(list<Question>& testQuestions) {
-    std::mt19937 generator;  // 创建一个默认初始化的 Mersenne Twister 随机数生成引擎，不过这样每次运行结果一样，通常需要设置种子
+    std::mt19937 generator;  // 创建一个默认初始化的 Mersenne Twister 随机数生成引擎，需要设置种子,否则每次生成的都一样
     std::random_device rd;  // 用于获取真正随机的种子值（依赖硬件熵源等）
     generator.seed(rd());  // 使用随机设备获取的随机值作为种子初始化引擎
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 10; ++i) {  //出10题
         Question question{};
         question.num1 = generator() % 50;
         question.num2 = generator() % 50;
-        int operationChoice = generator() % 2;
-        if (operationChoice == 0) {
+        int operationChoice = generator() % 2; 
+        if (operationChoice == 0) {  //随机数对2求余,余数为0生成+号,余数为1生成-号
             question.operatorSymbol = '+';
             question.correctAnswer = question.num1 + question.num2;
             if (question.correctAnswer > 50) {
@@ -336,14 +335,14 @@ void generateQuestions(list<Question>& testQuestions) {
             }
         }
         question.isAnswered = false;
-        testQuestions.push_back(question);
+        testQuestions.push_back(question);//生成的问题加入问题列表
     }
 }
 
 // 显示试题函数
 void Questions_show(Student& student) {
-    cout << "这是尚未被保存的第" << Number << "套试题" << endl;
-    int questionNumber = 1;
+    cout << "[未保存]若被保存,这是第" << Number << "套试题" << endl;
+    int questionNumber = 1; //从第一个问题开始循环显示
     for (const Question& question : student.testQuestions) {
         cout << questionNumber << ". " << question.num1 << " " << question.operatorSymbol << " "
             << question.num2 << " = " << question.correctAnswer << endl;
@@ -364,8 +363,8 @@ void Question_save(Student& student) {
                 << question.num2 << " = " << question.correctAnswer << endl;
             questionNumber++;
         }
-        Number++;
-        ofstream config("config");
+        Number++;//更新全局变量:实际被保存的试题数量
+        ofstream config("config");//更新config内数据
         config << Number;
         config.close();
         cout << "保存成功!" << endl;
@@ -373,28 +372,28 @@ void Question_save(Student& student) {
     }
 }
 
-// 答题函数
+// 用户答题函数
 void takeTest(Student& student) {
     student.startTime = time(nullptr);
     int questionNumber = 1;
     for (Question& question : student.testQuestions) {
         int tries = 0;
-        while (tries < 3) {
+        while (tries < 3) {              //每题有三次尝试机会
             cout << questionNumber << ". " << question.num1 << " " << question.operatorSymbol << " "
                 << question.num2 << " = ";
             cin >> question.userAnswer;
 
             if (question.userAnswer == question.correctAnswer) {
-                if (tries == 0) {
+                if (tries == 0) {       //一次做对给10分
                     student.score += 10;
                 }
-                else if (tries == 1) {
+                else if (tries == 1) {  //错了一次,做对给7分
                     student.score += 7;
                 }
                 else {
-                    student.score += 5;
+                    student.score += 5;  //错了两次,做对给5分
                 }
-                question.isAnswered = true;
+                question.isAnswered = true; //问题已被正确回答
                 break;
             }
             else {
@@ -432,6 +431,11 @@ void modifyQuestion(list<Question>& testQuestions) {
         if (operationChoice == 0) {
             it->operatorSymbol = '+';
             it->correctAnswer = it->num1 + it->num2;
+            if (it->correctAnswer > 50) {
+                cout << "加法结果不能大于50，请重新输入。" << endl;
+                modifyQuestion(testQuestions);
+                return;
+            }
         }
         else {
             it->operatorSymbol = '-';
@@ -560,7 +564,7 @@ void Leaderboard(const Student& student) {
         }
         inputFile.close();
 
-        // 使用标准库的排序算法进行排序
+        // 使用标准库的排序算法,自定义排序方式(分数从大到小)进行排序
         sort(students.begin(), students.end(), compareStudents);
     }
     else {
@@ -569,7 +573,7 @@ void Leaderboard(const Student& student) {
 
     // 输出排序后的结果
     cout << "********排行榜***********" << endl;
-    int rank = 1;
+    int rank = 1; //从第一名开始往后排序
     for (const auto& s : students) {
         cout << rank << "." << s.Username << " " << s.score << endl;
         rank++;
@@ -589,12 +593,12 @@ void question_GUI() {
     cout << "*************************" << endl;
 }
 
-void his_GUI() {
+void his_GUI() {  //查看历史记录时的辅助图形界面
     cout << "*************************" << endl;
     cout << "1.返回上一级" << endl;
     cout << "*************************" << endl;
 }
-void ans_GUI() {
+void ans_GUI() {  //答题结束后的辅助图形界面
     cout << "*************************" << endl;
     cout << "1.返回上一级" << endl;
     cout << "*************************" << endl;
@@ -602,23 +606,22 @@ void ans_GUI() {
 
 int main()
 {
-    Update_Number();
-    Student student;
-    bool login_state = false;
+    Update_Number();//从文件中读取更新Number数值
+    Student student; //构造
+    bool login_state = false;//初始化登录状态为:未登录
     while (login_state == 0) {
         int result = login(student);
-        if (result == 1) {
-            login_state = true;
+        if (result == 1) { //登录成功则函数返回1
+            login_state = true;//离开循环
             break;
         }
     }
-    
 
-    // 生成试题
+    // 程序运行一次只生成一次试题,防止大家做的题不一样不公平
     generateQuestions(student.testQuestions);
-    while (login_state == 1) {
-        system("cls");
-        GUI_main(student);
+    while (login_state == 1) { //登录成功时
+        system("cls");//清空页面面板,使终端更简洁
+        GUI_main(student);//显示主页面
         int in;
         cout << "输入编号以开始:";
         cin >> in;
@@ -633,116 +636,117 @@ int main()
         }
         switch (in) {
             //开始答题
-        case 1: {
-            bool answer_state = true;
-            system("cls");
-            // 进行测试
-            takeTest(student);
-            // 保存测试记录
-            student.saveTestRecord();
-            // 显示结果
-            displayResult(student);
-            writeToLeaderboard(student);
-            Leaderboard(student);
-            while (answer_state == 1) {
-                ans_GUI();
-                int ans_in;
-                cout << "输入编号以开始:";
-                cin >> ans_in;
-                if (ans_in == 1) {
-                    answer_state = 0;
+            case 1: {
+                bool answer_state = true;
+                system("cls");
+                // 进行测试
+                takeTest(student);
+                // 保存测试记录
+                student.saveTestRecord();
+                // 显示结果
+                displayResult(student);
+                writeToLeaderboard(student);
+                Leaderboard(student);
+                while (answer_state == 1) {
+                    ans_GUI();
+                    int ans_in;
+                    cout << "输入编号以开始:";
+                    cin >> ans_in;
+                    if (ans_in == 1) {
+                        answer_state = 0;
+                    }
                 }
+                break;
             }
-            break;
-        }
 
-              //查看试卷信息
-        case 2: {
-            system("cls");
-            bool state = true;
-            while (state) {
-                Questions_show(student);
-                question_GUI();
-                int q_in;
-                cout << "输入编号以开始:";
-                cin >> q_in;
-                switch (q_in) {
-                case 1:
-                    modifyQuestion(student.testQuestions);
-                    break;
-                case 2:
-                    insertQuestion(student.testQuestions);
-                case 3:
-                    deleteQuestion(student.testQuestions);
-                    break;
-                case 4: //保存当前试题
-                    Question_save(student);
-                    break;
-                case 5:
-                    student.reset_Q();
-                    generateQuestions(student.testQuestions);
-                    break;
-                case 6:  //从文件中读取试题
-                    {
-                    cout << "请输入要读取的试题编号:";
-                    int num;
-                    cin >> num;
-                    stringstream ss;
-                    ss << num << ".txt";
-                    string FileName = ss.str();
-                    // 调用Question类的readQuestionsFromFile函数读取试题，注意这里直接传入试题列表
-                    if (Question().readQuestionsFromFile(FileName, student.testQuestions)) {
-                        cout << "试题读取成功！" << endl;
+            //查看试卷信息
+            case 2: {
+                system("cls");
+                bool state = true;
+                while (state) {
+                    Questions_show(student);
+                    question_GUI();
+                    int q_in;
+                    cout << "输入编号以开始:";
+                    cin >> q_in;
+                    switch (q_in) {
+                    case 1://修改试题
+                        modifyQuestion(student.testQuestions);
+                        break;
+                    case 2://插入试题
+                        insertQuestion(student.testQuestions);
+                        break;
+                    case 3://删除试题
+                        deleteQuestion(student.testQuestions);
+                        break;
+                    case 4: //保存当前试题
+                        Question_save(student);
+                        break;
+                    case 5:
+                        student.reset_Q();
+                        generateQuestions(student.testQuestions);
+                        break;
+                    case 6:  //从文件中读取试题
+                        {
+                        cout << "请输入要读取的试题编号:";
+                        int num;
+                        cin >> num;
+                        stringstream ss;
+                        ss << num << ".txt";
+                        string FileName = ss.str();
+                        // 调用Question类的readQuestionsFromFile函数读取试题，注意这里直接传入试题列表
+                        if (Question().readQuestionsFromFile(FileName, student.testQuestions)) {
+                            cout << "试题读取成功！" << endl;
+                        }
+                        else {
+                            cout << "试题读取失败，请检查相关问题。" << endl;
+                        }
+                        break;
+                        }
+                    case 7:
+                        state = false;
+                        break;
                     }
-                    else {
-                        cout << "试题读取失败，请检查相关问题。" << endl;
-                    }
-                    break;
-                    }
-                case 7:
-                    state = false;
-                    break;
                 }
-            }
         
 
-            break;
-        }
+                break;
+            }
 
-              //退出程序
-        case 6: {
-            system("cls");
-            cout << "感谢您的使用,我们下次再会!" << endl;
-            cout << "程序将于1s后退出" << endl;
-            this_thread::sleep_for(std::chrono::milliseconds(1000));
-            exit(1);
-        }
+            //退出程序
+            case 6: {
+                system("cls");
+                cout << "感谢您的使用,我们下次再会!" << endl;
+                cout << "程序将于1s后退出" << endl;
+                this_thread::sleep_for(std::chrono::milliseconds(1000));
+                exit(1);
+            }
 
-              //切换账号
-        case 4: {
-            system("cls");
-            // 调用学生对象的reset函数清除当前学生信息
-            student.reset();
-            bool login_state_new = false;
-            while (login_state_new == false) {
-                int result = login(student);
-                if (result == 1) {
-                    login_state_new = true;
-                    // 更新外层的login_state变量，确保后续流程正常
-                    login_state = true;
-                    break;
+            //切换账号
+            case 4: {
+                system("cls");
+                // 调用学生对象的reset函数清除当前学生信息
+                student.reset();
+                bool login_state_new = false;
+                while (login_state_new == false) {
+                    int result = login(student);
+                    if (result == 1) {
+                        login_state_new = true;
+                        // 更新外层的login_state变量，确保后续流程正常
+                        login_state = true;
+                        break;
+                    }
+
+
                 }
-
-
+                // 如果新的登录失败，将login_state设置为false，避免后续异常流程
+                if (!login_state_new) {
+                    login_state = false;
+                }
+                break;
             }
-            // 如果新的登录失败，将login_state设置为false，避免后续异常流程
-            if (!login_state_new) {
-                login_state = false;
-            }
-            break;
-        }
 
-              //查看排行榜
+         //查看排行榜
         case 3: {
             system("cls");
             bool l_state = true;
@@ -779,7 +783,7 @@ int main()
             break;
         }
 
-              //查看历史记录
+        //查看历史记录
         case 5: {
             system("cls");
             bool his_state = true;
@@ -816,13 +820,3 @@ int main()
     }
 }
 
-// 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单
-// 调试程序: F5 或调试 >“开始调试”菜单
-
-// 入门使用技巧: 
-//   1. 使用解决方案资源管理器窗口添加/管理文件
-//   2. 使用团队资源管理器窗口连接到源代码管理
-//   3. 使用输出窗口查看生成输出和其他消息
-//   4. 使用错误列表窗口查看错误
-//   5. 转到“项目”>“添加新项”以创建新的代码文件，或转到“项目”>“添加现有项”以将现有代码文件添加到项目
-//   6. 将来，若要再次打开此项目，请转到“文件”>“打开”>“项目”并选择 .sln 文件
