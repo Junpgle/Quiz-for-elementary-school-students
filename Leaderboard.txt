@@ -1,0 +1,9 @@
+aaa 97
+bbb 100
+aaa 0
+aaa 97
+aaa 97
+aaa 194
+aaa 0
+aaa 5
+aaa 100
