@@ -1,3 +1,6 @@
+# 该项目已通过QT框架重新构建出清晰的可视化界面! 
+# 详情请见:[Quiz-for-elementary-school-students-QT](https://github.com/Junpgle/Quiz-for-elementary-school-students-QT/tree/master)
+# 
 # 在豆包和同学的大力支持下，我终于完成了大一上的课设。
 ## 做的不咋地，但也是一份纪念。
 
